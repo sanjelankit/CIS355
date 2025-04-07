@@ -8,13 +8,71 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Fetch issues from the database
-$conn = Database::connect();
-$stmt = $conn->prepare("SELECT id, short_description, long_description, priority, open_date, close_date FROM iss_issues");
-$stmt->execute();
-$issues = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Function to handle modal display for read, update, and delete actions
+
+//handle issue operations id 
+if ( isset($_FILES['pdf_attachment'])) {
+    $fileTemppath =$_FILES['pdf_attachment']['tmp_name'];
+    $fileName =$_FILES['pdf_attachment']['name'];
+    $fileType =$_FILES['pdf_attachment']['type'];
+    $fileSize =$_FILES['pdf_attachment']['size'];
+    $fileNameCmps = explode(",", $fileName);
+    $fileExtension =strtolower(end($fileNameCmps));
+
+
+if ($fileExtension !==  'pdf'){
+die ('Only PDF File allowed ');
+}
+
+if ($fileSize > 2 * 1024 * 1024 ) {
+    die ('File sixze exceeds 2MB limit');
+}
+
+
+$newFileName = MD5(time(). $fileName) . ',' . $fileExtension;
+$uploadFileDir = './upload/'; 
+$dest_path = $uploadFileDir . $newFileName;
+
+if(!is_dir( $uploadFileDir )){
+mkdir( $uploadFileDir, 0755 , true );
+}
+
+
+if (!move_uploaded_file($fileTemppath, $dest_path)) {
+$attachmentPath = $dest_path;
+} 
+else {
+    die ('error moving file');
+}
+
+}
+
+
+
+
+// Handle issue deletion
+if (isset($_GET['delete_id'])) {
+    $delete_id = $_GET['delete_id'];
+
+    try {
+        $conn = Database::connect();
+        $stmt = $conn->prepare("DELETE FROM iss_issues WHERE id = ?");
+        $stmt->execute([$delete_id]);
+        header("Location: issues_list.php");
+        exit();
+    } catch (PDOException $e) {
+        $error_message = "Error deleting issue: " . $e->getMessage();
+    }
+}
+
+// Fetch all issues from the database
+try {
+    $conn = Database::connect();
+    $stmt = $conn->query("SELECT * FROM iss_issues");
+    $issues = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $error_message = "Error fetching issues: " . $e->getMessage();
+}
 ?>
 
 <!DOCTYPE html>
@@ -24,29 +82,70 @@ $issues = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Issues List - DSR</title>
     <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
         }
+
+        h2 {
+            text-align: center;
+            padding: 20px;
+            background-color: #333;
+            color: white;
+        }
+
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            background-color: white;
+        }
+
         th, td {
             padding: 10px;
-            text-align: left;
+            text-align: center;
             border: 1px solid #ddd;
         }
+
         th {
-            background-color: #f2f2f2;
-        }
-        .add-issue-btn {
-            margin: 20px 0;
-            padding: 10px 15px;
-            background-color: #4CAF50;
+            background-color: #333;
             color: white;
+        }
+
+        button {
+            padding: 8px 12px;
             border: none;
             cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
         }
-        .add-issue-btn:hover {
-            background-color: #45a049;
+
+        button:hover {
+            background-color: #007BFF;
+            color: white;
         }
+
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+
+        .comments-btn {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        .comments-btn:hover {
+            background-color: #138496;
+        }
+
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -56,51 +155,83 @@ $issues = $stmt->fetchAll(PDO::FETCH_ASSOC);
             width: 100%;
             height: 100%;
             overflow: auto;
-            background-color: rgba(0, 0, 0, 0.4);
+            background-color: rgba(0, 0, 0, 0.5);
             padding-top: 60px;
         }
+
         .modal-content {
-            background-color: #fefefe;
+            background-color: #fff;
             margin: 5% auto;
             padding: 20px;
             border: 1px solid #888;
-            width: 80%;
+            width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
+
+        .modal h3 {
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .modal button {
+            font-size: 16px;
+            padding: 10px 20px;
+            margin: 5px;
+        }
+
+        .modal .btn-yes {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .modal .btn-no {
+            background-color: #6c757d;
+            color: white;
+        }
+
         .close {
             color: #aaa;
-            float: right;
             font-size: 28px;
             font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
         }
+
         .close:hover,
         .close:focus {
             color: black;
             text-decoration: none;
             cursor: pointer;
         }
-        .button-group {
-            display: flex;
-            gap: 10px;
-        }
-        .button-group button {
-            padding: 5px 10px;
-            cursor: pointer;
+
+        /* Responsive Design */
+        @media screen and (max-width: 600px) {
+            table {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
+
     <h2>Issues List</h2>
 
-    <!-- Add New Issue Button -->
-    <a href="add_issue.php"><button class="add-issue-btn">Add New Issue</button></a>
+    <?php
+    // Display any error message
+    if (isset($error_message)) {
+        echo "<p style='color: red; text-align: center;'>$error_message</p>";
+    }
+    ?>
 
-    <!-- Issues Table -->
+    <a href="add_issue.php"><button>Add New Issue</button></a>
+
     <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Short Description</th>
-                <th>Long Description</th>
                 <th>Priority</th>
                 <th>Open Date</th>
                 <th>Close Date</th>
@@ -110,107 +241,50 @@ $issues = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <tbody>
             <?php foreach ($issues as $issue): ?>
                 <tr>
-                    <td><?php echo htmlspecialchars($issue['id']); ?></td>
-                    <td><?php echo htmlspecialchars($issue['short_description']); ?></td>
-                    <td><?php echo htmlspecialchars($issue['long_description']); ?></td>
-                    <td><?php echo htmlspecialchars($issue['priority']); ?></td>
-                    <td><?php echo htmlspecialchars($issue['open_date']); ?></td>
-                    <td><?php echo htmlspecialchars($issue['close_date']); ?></td>
-                    <td class="button-group">
-                        <!-- Read Button -->
-                        <button onclick="openModal('read', <?php echo $issue['id']; ?>)">R</button>
-                        <!-- Update Button -->
-                        <button onclick="openModal('update', <?php echo $issue['id']; ?>)">U</button>
-                        <!-- Delete Button -->
-                        <button onclick="openModal('delete', <?php echo $issue['id']; ?>)">D</button>
+                    <td><?php echo $issue['id']; ?></td>
+                    <td><?php echo $issue['short_description']; ?></td>
+                    <td><?php echo $issue['priority']; ?></td>
+                    <td><?php echo $issue['open_date']; ?></td>
+                    <td><?php echo $issue['close_date']; ?></td>
+                    <td>
+                        <a href="read_issue.php?id=<?php echo $issue['id']; ?>"><button>Read</button></a>
+                        <a href="update_issue.php?id=<?php echo $issue['id']; ?>"><button>Update</button></a>
+                        <a href="issue_comments.php?issue_id=<?php echo $issue['id']; ?>"><button class="comments-btn">Comments</button></a>
+                        <button class="delete-btn" onclick="showDeleteModal(<?php echo $issue['id']; ?>)">Delete</button>
                     </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
 
-    <!-- Modal for Read, Update, Delete -->
-    <div id="modal" class="modal">
+    <!-- Modal for Deleting -->
+    <div id="deleteModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
-            <h3 id="modal-title">Read Issue</h3>
-            <form id="issue-form" method="POST" action="">
-                <label for="short_description">Short Description:</label>
-                <input type="text" id="short_description" name="short_description" readonly><br><br>
-
-                <label for="long_description">Long Description:</label>
-                <textarea id="long_description" name="long_description" readonly></textarea><br><br>
-
-                <label for="priority">Priority:</label>
-                <input type="text" id="priority" name="priority" readonly><br><br>
-
-                <label for="open_date">Open Date:</label>
-                <input type="date" id="open_date" name="open_date" readonly><br><br>
-
-                <label for="close_date">Close Date:</label>
-                <input type="date" id="close_date" name="close_date" readonly><br><br>
-
-                <!-- Buttons for Update and Delete -->
-                <div id="modal-buttons">
-                    <!-- Buttons dynamically shown based on action -->
-                </div>
-            </form>
+            <h3>Are you sure you want to delete this issue?</h3>
+            <a href="" id="deleteLink"><button class="btn-yes">Yes</button></a>
+            <button class="btn-no" onclick="closeModal()">No</button>
         </div>
     </div>
 
     <script>
-        // Open the modal and populate data based on action type (read, update, delete)
-        function openModal(action, issueId) {
-            var modal = document.getElementById('modal');
-            var form = document.getElementById('issue-form');
-            var modalTitle = document.getElementById('modal-title');
-            var modalButtons = document.getElementById('modal-buttons');
-
-            // Set modal action title
-            if (action === 'read') {
-                modalTitle.innerHTML = 'Read Issue';
-                form.elements['short_description'].readOnly = true;
-                form.elements['long_description'].readOnly = true;
-                form.elements['priority'].readOnly = true;
-                form.elements['open_date'].readOnly = true;
-                form.elements['close_date'].readOnly = true;
-                modalButtons.innerHTML = ''; // No buttons for read
-            } else if (action === 'update') {
-                modalTitle.innerHTML = 'Update Issue';
-                form.elements['short_description'].readOnly = false;
-                form.elements['long_description'].readOnly = false;
-                form.elements['priority'].readOnly = false;
-                form.elements['open_date'].readOnly = false;
-                form.elements['close_date'].readOnly = false;
-                modalButtons.innerHTML = '<button type="submit" name="update" value="' + issueId + '">Update Issue</button>';
-            } else if (action === 'delete') {
-                modalTitle.innerHTML = 'Delete Issue';
-                form.elements['short_description'].readOnly = true;
-                form.elements['long_description'].readOnly = true;
-                form.elements['priority'].readOnly = true;
-                form.elements['open_date'].readOnly = true;
-                form.elements['close_date'].readOnly = true;
-                modalButtons.innerHTML = '<button type="submit" name="delete" value="' + issueId + '">Delete Issue</button>';
-            }
-
-            // Fetch issue data and populate the modal form fields
-            fetch('get_issue_data.php?id=' + issueId)
-                .then(response => response.json())
-                .then(data => {
-                    form.elements['short_description'].value = data.short_description;
-                    form.elements['long_description'].value = data.long_description;
-                    form.elements['priority'].value = data.priority;
-                    form.elements['open_date'].value = data.open_date;
-                    form.elements['close_date'].value = data.close_date;
-                });
-
-            modal.style.display = 'block';
+        function showDeleteModal(issueId) {
+            // Show the modal
+            document.getElementById("deleteModal").style.display = "block";
+            // Set the URL for the Yes button to delete the issue
+            document.getElementById("deleteLink").href = "issues_list.php?delete_id=" + issueId;
         }
 
-        // Close the modal
         function closeModal() {
-            var modal = document.getElementById('modal');
-            modal.style.display = 'none';
+            // Close the modal
+            document.getElementById("deleteModal").style.display = "none";
+        }
+
+        // Close modal if the user clicks anywhere outside of the modal
+        window.onclick = function(event) {
+            if (event.target == document.getElementById("deleteModal")) {
+                closeModal();
+            }
         }
     </script>
 
