@@ -31,7 +31,6 @@ try {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>View Issue - DSR</title>
     <style>
         body {
@@ -42,7 +41,7 @@ try {
         }
 
         .container {
-            width: 50%;
+            width: 60%;
             margin: 50px auto;
             background: white;
             padding: 20px;
@@ -91,6 +90,12 @@ try {
         .btn:hover {
             background-color: #0056b3;
         }
+
+        .pdf-preview {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            height: 600px;
+        }
     </style>
 </head>
 <body>
@@ -99,11 +104,24 @@ try {
     <h2>Issue Details</h2>
     <div class="content">
         <p><strong>ID:</strong> <?php echo htmlspecialchars($issue['id']); ?></p>
-        <p><strong>Short Description:</strong> <?php echo htmlspecialchars($issue['short_description']); ?></p>
+        <p><strong>Full Description:</strong> <?php echo htmlspecialchars($issue['long_description']); ?></p>
         <p><strong>Priority:</strong> <?php echo htmlspecialchars($issue['priority']); ?></p>
         <p><strong>Open Date:</strong> <?php echo htmlspecialchars($issue['open_date']); ?></p>
         <p><strong>Close Date:</strong> <?php echo htmlspecialchars($issue['close_date'] ?: "N/A"); ?></p>
+
+        <?php if (!empty($issue['pdf_attachment']) && file_exists($issue['pdf_attachment'])): ?>
+            <h3>Attached PDF:</h3>
+            <div class="pdf-preview">
+                <embed src="<?php echo htmlspecialchars($issue['pdf_attachment']); ?>" type="application/pdf" width="100%" height="100%">
+            </div>
+            <p style="text-align:center; margin-top: 10px;">
+                <a class="btn" href="<?php echo htmlspecialchars($issue['pdf_attachment']); ?>" target="_blank">Download PDF</a>
+            </p>
+        <?php else: ?>
+            <p><strong>Attachment:</strong> No PDF attached.</p>
+        <?php endif; ?>
     </div>
+
     <div class="btn-container">
         <a href="issues_list.php" class="btn">Back to Issues</a>
     </div>
