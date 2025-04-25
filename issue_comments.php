@@ -1,6 +1,6 @@
 <?php
 session_start();
-require '../database/database.php';
+require(__DIR__ . '/database/database.php');
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -61,11 +61,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 } elseif (isset($_GET['delete_comment'])) {
-    // Delete comment
+    // Delete comment (admin or comment creator)
     $comment_id = $_GET['delete_comment'];
     try {
-        $stmt = $conn->prepare("DELETE FROM iss_comments WHERE id = ? AND per_id = ?");
-        $stmt->execute([$comment_id, $_SESSION['user_id']]);
+        if ($_SESSION['admin']) {
+            $stmt = $conn->prepare("DELETE FROM iss_comments WHERE id = ?");
+            $stmt->execute([$comment_id]);
+        } else {
+            $stmt = $conn->prepare("DELETE FROM iss_comments WHERE id = ? AND per_id = ?");
+            $stmt->execute([$comment_id, $_SESSION['user_id']]);
+        }
         header("Location: issue_comments.php?issue_id=$issue_id");
         exit();
     } catch (PDOException $e) {
@@ -73,14 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+
 // Fetch comments for this issue
 try {
     $stmt = $conn->prepare("
-        SELECT c.*, p.name AS author 
-        FROM iss_comments c 
-        JOIN iss_persons p ON c.per_id = p.id 
-        WHERE c.iss_id = ? 
-        ORDER BY c.posted_date DESC
+     SELECT c.*, CONCAT(p.fname, ' ', p.lname) AS author 
+FROM iss_comments c 
+JOIN iss_persons p ON c.per_id = p.id 
+WHERE c.iss_id = ? 
+ORDER BY c.posted_date DESC
+
     ");
     $stmt->execute([$issue_id]);
     $comments = $stmt->fetchAll(PDO::FETCH_ASSOC);

@@ -1,6 +1,6 @@
 <?php
 session_start();
-require '../database/database.php'; // Ensure correct path
+require(__DIR__ . '/database/database.php');
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $email = $_POST['email'];

@@ -1,13 +1,19 @@
 <?php
-require '../database/database.php';
+session_start();
+require(__DIR__ . '/database/database.php');
+
+if (!isset($_SESSION['user_id']) || !$_SESSION['admin']) {
+    header("Location: login.php");
+    exit();
+}
 
 $conn = Database::connect();
 $users = $conn->query("
-    SELECT p.id, p.fname, p.lname, p.mobile, p.email, p.admin, COUNT(i.id) AS issue_count
+    SELECT p.id, p.fname, p.lname, p.mobile, p.email, p.admin, 
+           (SELECT COUNT(*) FROM iss_issues i WHERE i.per_id = p.id) AS issue_count
     FROM iss_persons p
-    LEFT JOIN iss_issues i ON p.id = i.per_id
-    GROUP BY p.id
 ")->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 
 <!DOCTYPE html>
@@ -30,6 +36,12 @@ $users = $conn->query("
 <body>
 
 <div class="container">
+<a href="issues_list.php">
+    <button style="margin-bottom: 15px; background-color: #007BFF; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer;">
+        ← Back to Issues
+    </button>
+</a>
+
     <h2>Users List</h2>
     <button onclick="document.getElementById('addUserModal').style.display='block'">+ Add User</button>
     
@@ -39,7 +51,6 @@ $users = $conn->query("
             <th>Email</th>
             <th>Mobile</th>
             <th>Admin</th>
-            <th>Issues Reported</th>
             <th>Actions</th>
         </tr>
         <?php foreach ($users as $user): ?>
@@ -47,11 +58,12 @@ $users = $conn->query("
                 <td><?= htmlspecialchars($user['fname'] . " " . $user['lname']) ?></td>
                 <td><?= htmlspecialchars($user['email']) ?></td>
                 <td><?= htmlspecialchars($user['mobile']) ?></td>
-                <td><?= $user['admin'] ? "Yes" : "No" ?></td>
-                <td><?= $user['issue_count'] ?></td>
+                <td><?= ($user['admin'] === 'Yes') ? "Yes" : "No" ?></td>
                 <td>
-                    <button class="btn edit-btn" onclick="editUser(<?= $user['id'] ?>, '<?= htmlspecialchars($user['fname']) ?>', '<?= htmlspecialchars($user['lname']) ?>', '<?= htmlspecialchars($user['mobile']) ?>', '<?= htmlspecialchars($user['email']) ?>', <?= $user['admin'] ?>)">Edit</button>
-                    <button class="btn delete-btn" onclick="deleteUser(<?= $user['id'] ?>)">Delete</button>
+                <a href="edit_user.php?id=<?= $user['id'] ?>"><button>Edit</button></a>
+                <?php if ($_SESSION['user_id'] != $user['id'] && $user['admin'] !== 'Yes'): ?>
+                        <button class="btn delete-btn" onclick="deleteUser(<?= $user['id'] ?>)">Delete</button>
+                    <?php endif; ?>
                 </td>
             </tr>
         <?php endforeach; ?>

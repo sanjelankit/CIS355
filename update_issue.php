@@ -1,6 +1,24 @@
 <?php
 session_start();
-require '../database/database.php';
+require(__DIR__ . '/database/database.php');
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+$id = $_GET['id'] ?? 0;
+$conn = Database::connect();
+
+// Fetch the issue
+$stmt = $conn->prepare("SELECT * FROM iss_issues WHERE id = ?");
+$stmt->execute([$id]);
+$issue = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Check permission
+if (!$issue || (!$_SESSION['admin'] && $_SESSION['user_id'] != $issue['per_id'])) {
+    die("Unauthorized access.");
+}
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -22,6 +40,14 @@ try {
     if (!$issue) {
         die("Error: Issue not found.");
     }
+    // Ownership/Admin check
+$is_owner = ($_SESSION['user_id'] == $issue['per_id']);
+$is_admin = isset($_SESSION['admin']) && $_SESSION['admin'];
+
+if (!$is_owner && !$is_admin) {
+    die("Unauthorized access.");
+}
+
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $short_description = $_POST['short_description'];
